@@ -65,3 +65,4 @@ class ReservaResponse(ReservaCreate):
     
     class Config:
         from_attributes = True 
+
