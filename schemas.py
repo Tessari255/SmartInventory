@@ -1,6 +1,5 @@
 from typing import Optional
-
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 # --- Schemas de Acessórios ---
 class AcessorioCreate(BaseModel):
@@ -8,11 +7,19 @@ class AcessorioCreate(BaseModel):
     codigo_patrimonio: str
 
 class AcessorioResponse(AcessorioCreate):
+    model_config = ConfigDict(from_attributes=True)
     id: int
     status: str
 
-    class Config:
-        from_attributes = True
+# --- Schemas de Salas (NOVO) ---
+class SalaCreate(BaseModel):
+    nome: str
+    modalidade: str
+
+class SalaResponse(SalaCreate):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    status: str
 
 # --- Schemas de Login ---
 class LoginRequest(BaseModel):
@@ -34,35 +41,42 @@ class UsuarioCreate(BaseModel):
     perfil: str 
 
 class UsuarioResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
     id: int
     nome: str
+    matricula: str 
     email: str
     perfil: str
 
-    class Config:
-        from_attributes = True
-
-       
+# --- Schemas de Requerimentos  ---
 class RequerimentoCreate(BaseModel):
     solicitante: str
-    equipamento: str
+    equipamento: str  
     justificativa: str
 
 class RequerimentoUpdate(BaseModel):
     status: str
     motivo_rejeicao: Optional[str] = None
 
-    
+# --- Schemas de Solicitações  ---
+class SolicitacaoAlunoCreate(BaseModel):
+    aluno: str
+    recurso_id: str
+    professor_id: Optional[int] = None
+    finalidade: str
+
+class AvaliacaoAluno(BaseModel):
+    status: str
+    motivo: str
+
+# --- Schemas de Reservas ---
 class ReservaCreate(BaseModel):
     solicitante: str
     equipamento: str
     data_reserva: str
 
-
 class ReservaResponse(ReservaCreate):
+    model_config = ConfigDict(from_attributes=True)
     id: int
     devolvido: bool
-    
-    class Config:
-        from_attributes = True 
-
+    recurso_id_original: Optional[str] = None 

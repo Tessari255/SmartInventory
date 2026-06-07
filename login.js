@@ -1,4 +1,9 @@
- window.onload = function() {
+let choicesProfessor = null;
+let choicesAluno = null;
+let graficoDiretoriaInstancia = null;
+let meuGrafico = null; 
+
+window.onload = function() {
     const nomeSalvo = localStorage.getItem('usuario_nome');
     const perfilSalvo = localStorage.getItem('usuario_perfil');
     if (nomeSalvo && perfilSalvo) {
@@ -6,7 +11,7 @@
     }
 }
 
-//  1 LOGIN
+// 1. LOGIN
 async function fazerLogin(event) {
     event.preventDefault();
     const email = document.getElementById('email').value;
@@ -32,7 +37,7 @@ async function fazerLogin(event) {
     }
 }
 
-// 2 CONFIGURA A TELA BASEADO NO PERFIL
+// 2. CONFIGURA A TELA BASEADO NO PERFIL
 function configurarPainelPorPerfil(nome, perfil) {
     document.getElementById('login-section').style.display = 'none';
     document.getElementById('app-section').style.display = 'flex';
@@ -41,32 +46,41 @@ function configurarPainelPorPerfil(nome, perfil) {
 
     let idPrimeiraAba = '';
 
+    const formAluno = document.getElementById('form-aluno-reserva');
+    if (formAluno) formAluno.onsubmit = enviarSolicitacaoAluno;
+
     if (perfil === 'Professor') {
         document.getElementById('titulo-portal').innerText = 'Portal Docente';
         document.getElementById('texto-boas-vindas').innerText = `Bem-vindo, Prof. ${nome}!`;
         document.getElementById('menu-professor').style.display = 'flex';
         idPrimeiraAba = 'aba-prof-dashboard';
 
-        
         carregarRequerimentos();
         carregarDropdownReservas(); 
         carregarReservas();         
+        carregarRequerimentosAlunos(); 
     } 
     else if (perfil === 'Aluno') {
         document.getElementById('titulo-portal').innerText = 'Portal do Aluno';
         document.getElementById('texto-boas-vindas').innerText = `Olá, ${nome}!`;
         document.getElementById('menu-aluno').style.display = 'flex';
         idPrimeiraAba = 'aba-aluno-dashboard';
+
+        carursosAluno(); 
+        carregarProfessores(); 
     } 
     else { 
-        document.getElementById('titulo-portal').innerText = 'Setor de Compras';
+        document.getElementById('titulo-portal').innerText = 'Diretoria';
         document.getElementById('texto-boas-vindas').innerText = `Visão Administrativa: ${nome}`;
         document.getElementById('menu-compras').style.display = 'flex';
         idPrimeiraAba = 'aba-compras-dashboard';
 
+        carregarDashboardDiretoria(); 
         carregarAcessorios('tabela-compras-acessorios'); 
         carregarRequerimentos(); 
         gerarCodigoPatrimonio();
+        carregarUsuarios(); 
+        carregarSalasCadastradas(); 
     }
 
     const menuAtivo = document.getElementById(perfil === 'Professor' ? 'menu-professor' : (perfil === 'Aluno' ? 'menu-aluno' : 'menu-compras'));
@@ -76,7 +90,7 @@ function configurarPainelPorPerfil(nome, perfil) {
     }
 }
 
-// 3 NAVEGAÇÃO ENTRE ABAS 
+// 3. NAVEGAÇÃO ENTRE ABAS 
 function mudarAba(idAba, botaoClicado) {
     document.querySelectorAll('.aba').forEach(aba => aba.classList.remove('ativa'));
     document.querySelectorAll('.menu-btn').forEach(btn => btn.classList.remove('ativo'));
@@ -85,29 +99,42 @@ function mudarAba(idAba, botaoClicado) {
     if(botaoClicado) botaoClicado.classList.add('ativo');
 }
 
-// 4 CARREGAR ACESSÓRIOS DO POSTGRES 
+// 4. CARREGAR ACESSÓRIOS 
 async function carregarAcessorios(idTabelaAlvo) {
     try {
         const resposta = await fetch('http://127.0.0.1:8000/acessorios/');
-        const itens = await resposta.json();
+        let itens = await resposta.json();
+
+        itens.sort((a, b) => b.id - a.id);
+
         const tbody = document.getElementById(idTabelaAlvo);
         if(!tbody) return; 
         tbody.innerHTML = ""; 
 
+        const eDiretoria = idTabelaAlvo === 'tabela-compras-acessorios';
+
         if(itens.length === 0) {
-            tbody.innerHTML = "<tr><td colspan='4' style='text-align:center;'>Nenhum acessório cadastrado.</td></tr>";
+            const colSpan = eDiretoria ? 5 : 4;
+            tbody.innerHTML = `<tr><td colspan='${colSpan}' style='text-align:center;'>Nenhum acessório cadastrado.</td></tr>`;
             return;
         }
 
-        itens.forEach(item => {
+        itens.forEach((item, index) => {
             const tr = document.createElement('tr');
-            tr.innerHTML = `<td>#${item.id}</td><td><strong>${item.nome}</strong></td><td>${item.codigo_patrimonio}</td><td><span class="status-ok">${item.status}</span></td>`;
+            let colAcoes = '';
+            
+            
+            if (eDiretoria) {
+                colAcoes = `<td><button onclick="deletarAcessorio(${item.id})" style="background-color: #e74c3c; padding: 5px 10px; font-size: 12px; color: white; border: none; cursor: pointer; border-radius: 4px;">🗑️ Excluir</button></td>`;
+            }
+            
+            tr.innerHTML = `<td><b>#${index + 1}</b></td><td><strong>${item.nome}</strong></td><td>${item.codigo_patrimonio}</td><td><span class="status-ok">${item.status}</span></td>${colAcoes}`;
             tbody.appendChild(tr);
         });
     } catch (error) { console.error("Erro ao buscar acessórios"); }
 }
 
-// 5 CADASTRAR NOVO ACESSÓRIO
+// 5. CADASTRAR NOVO ACESSÓRIO
 async function cadastrarAcessorio(event) {
     event.preventDefault();
     const nome = document.getElementById('nome-acessorio').value;
@@ -125,11 +152,12 @@ async function cadastrarAcessorio(event) {
             document.getElementById('form-acessorio').reset(); 
             carregarAcessorios('tabela-compras-acessorios'); 
             gerarCodigoPatrimonio();
+            carregarDashboardDiretoria(); 
         }
     } catch (error) { alert("Erro ao salvar no banco."); }
 }
 
-// 6 GERAÇÃO AUTOMÁTICA DE PATRIMÔNIO
+// 6. GERAÇÃO AUTOMÁTICA DE PATRIMÔNIO
 function gerarCodigoPatrimonio() {
     const ano = new Date().getFullYear();
     const numeroAleatorio = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
@@ -137,47 +165,60 @@ function gerarCodigoPatrimonio() {
     if(campoPatrimonio) campoPatrimonio.value = `PAT-${ano}-${numeroAleatorio}`;
 }
 
-// 7 CARREGAR REQUERIMENTOS DO BANCO
+// 7. CARREGAR REQUERIMENTOS E PAINEL DIRETORIA
 async function carregarRequerimentos() {
     try {
-        const resposta = await fetch('http://127.0.0.1:8000/requerimentos/');
-        const requerimentos = await resposta.json();
         const tbodyProf = document.getElementById('tabela-prof-meus-requerimentos');
-        const tbodyCompras = document.getElementById('tabela-compras-pedidos-dinamica');
         const usuarioLogado = localStorage.getItem('usuario_nome');
-        
-        if(tbodyProf) tbodyProf.innerHTML = "";
-        if(tbodyCompras) tbodyCompras.innerHTML = "";
 
-        requerimentos.forEach(req => {
-            let classeStatus = req.status === 'Pendente' ? 'status-pendente' : (req.status === 'Aprovado' ? 'status-ok' : 'status-recusado');
-            
-            let textoMotivo = "-";
-            if (req.status === 'Recusado') {
-                textoMotivo = req.motivo_rejeicao || "Sem justificativa informada.";
-            } else if (req.status === 'Aprovado') {
-                textoMotivo = "Adicionado ao Estoque";
-            }
-
-            if (tbodyProf && req.solicitante === usuarioLogado) {
-                tbodyProf.innerHTML += `<tr><td>${req.equipamento}</td><td><span class="${classeStatus}">${req.status}</span></td><td>${textoMotivo}</td></tr>`;
-            }
-
-            if (tbodyCompras) {
-                let botoesAcao = '-';
-                if (req.status === 'Pendente') {
-                    botoesAcao = `
-                        <button onclick="avaliarRequerimento(${req.id}, 'Aprovado')" style="background-color: #27ae60; padding: 5px 10px; font-size: 12px;">✔️ Aprovar</button>
-                        <button onclick="avaliarRequerimento(${req.id}, 'Recusado')" style="background-color: #e74c3c; padding: 5px 10px; font-size: 12px; margin-left: 5px;">❌ Recusar</button>
-                    `;
+        if(tbodyProf) {
+            const resProf = await fetch('http://127.0.0.1:8000/requerimentos/');
+            const requerimentos = await resProf.json();
+            tbodyProf.innerHTML = "";
+            requerimentos.forEach(req => {
+                if (req.solicitante === usuarioLogado) {
+                    let classeStatus = req.status === 'Pendente' ? 'status-pendente' : (req.status === 'Aprovado' ? 'status-ok' : 'status-recusado');
+                    let textoMotivo = req.status === 'Recusado' ? (req.motivo_rejeicao || "Sem justificativa") : (req.status === 'Aprovado' ? "Adicionado ao Estoque" : "-");
+                    tbodyProf.innerHTML += `<tr><td>${req.equipamento}</td><td><span class="${classeStatus}">${req.status}</span></td><td>${textoMotivo}</td></tr>`;
                 }
-                tbodyCompras.innerHTML += `<tr><td>${req.solicitante}</td><td>${req.equipamento}</td><td>${req.justificativa}</td><td><span class="${classeStatus}">${req.status}</span></td><td>${botoesAcao}</td></tr>`;
-            }
-        });
+            });
+        }
+
+        const tbodyCompras = document.getElementById('tabela-compras-pedidos-dinamica');
+        if(tbodyCompras) {
+            const resDiretoria = await fetch('http://127.0.0.1:8000/diretoria/painel-pedidos');
+            const painel = await resDiretoria.json();
+            tbodyCompras.innerHTML = "";
+
+            painel.forEach(item => {
+                let classeStatus = item.status === 'Pendente' ? 'status-pendente' : (item.status === 'Aprovado' ? 'status-ok' : 'status-recusado');
+                let botoesAcao = '-';
+                
+                if (item.status === 'Pendente' && item.tipo === 'Requerimento Professor') {
+                    botoesAcao = `
+                        <button onclick="avaliarRequerimento(${item.id}, 'Aprovado')" style="background-color: #27ae60; padding: 5px 10px; font-size: 12px;">✔️ Aprovar</button>
+                        <button onclick="avaliarRequerimento(${item.id}, 'Recusado')" style="background-color: #e74c3c; padding: 5px 10px; font-size: 12px; margin-left: 5px;">❌ Recusar</button>
+                    `;
+                } else if (item.status === 'Pendente' && item.tipo === 'Solicitação Aluno') {
+                    botoesAcao = `<span style="font-size: 12px; color: #f39c12;">Aguardando Prof.</span>`;
+                }
+
+                tbodyCompras.innerHTML += `
+                    <tr>
+                        <td>${item.origem}</td>
+                        <td>${item.recurso}</td>
+                        <td>${item.professor_responsavel || '-'}</td>
+                        <td>${item.motivo_justificativa}</td>
+                        <td><span class="${classeStatus}">${item.status}</span></td>
+                        <td>${botoesAcao}</td>
+                    </tr>
+                `;
+            });
+        }
     } catch (error) { console.error("Erro ao buscar requerimentos"); }
 }
 
-// 8 PROFESSOR ENVIA REQUERIMENTO
+// 8. PROFESSOR ENVIA REQUERIMENTO
 async function enviarRequerimento(event) {
     event.preventDefault();
     const equipamento = document.getElementById('req-equipamento').value;
@@ -197,7 +238,7 @@ async function enviarRequerimento(event) {
     }
 }
 
-// 9 COMPRAS AVALIA REQUERIMENTO
+// 9. COMPRAS/DIRETORIA AVALIA REQUERIMENTO
 async function avaliarRequerimento(id, novoStatus) {
     let motivo = null;
     if (novoStatus === 'Recusado') {
@@ -214,31 +255,53 @@ async function avaliarRequerimento(id, novoStatus) {
     if (resposta.ok) {
         alert(`Requerimento ${novoStatus.toLowerCase()}!`);
         carregarRequerimentos();
+        carregarDashboardDiretoria(); 
     }
 }
 
-// 10 CARREGAR OPÇÕES DE RESERVA
+// 10. CARREGAR OPÇÕES DE RESERVA DO PROFESSOR 
 async function carregarDropdownReservas() {
     try {
-        const resposta = await fetch('http://127.0.0.1:8000/acessorios/');
-        const itens = await resposta.json();
+        const resposta = await fetch('http://127.0.0.1:8000/recursos-disponiveis/');
+        const recursos = await resposta.json();
         const select = document.getElementById('select-equipamento');
         if(!select) return;
 
-        select.innerHTML = '<option value="">Selecione o Equipamento ou Sala...</option>';
-        select.innerHTML += '<option value="Sala de Informática 01"> Sala de Informática 01</option>';
-        select.innerHTML += '<option value="Laboratório de Redes"> Laboratório de Redes</option>';
+        if (choicesProfessor) {
+            choicesProfessor.destroy();
+            choicesProfessor = null;
+        }
 
-        itens.forEach(item => {
-            select.innerHTML += `<option value="${item.nome}">${item.nome} (Pat: ${item.codigo_patrimonio})</option>`;
+        select.innerHTML = ''; 
+
+        recursos.forEach(rec => {
+            const bloqueado = rec.status === 'Ocupado' ? 'disabled' : '';
+            const statusTexto = rec.status === 'Ocupado' ? ' (Em Uso)' : '';
+            select.innerHTML += `<option value="${rec.nome}" ${bloqueado}>${rec.nome} - ${rec.modalidade}${statusTexto}</option>`;
         });
-    } catch (error) { console.error("Erro ao carregar equipamentos para reserva"); }
+
+        if (typeof Choices !== 'undefined') {
+            choicesProfessor = new Choices(select, {
+                removeItemButton: true,
+                searchEnabled: true,
+                placeholderValue: 'Selecione um ou mais itens...',
+                itemSelectText: ''
+            });
+        }
+    } catch (error) { console.error("Erro ao carregar equipamentos para reserva", error); }
 }
 
-// 11. ENVIAR NOVA RESERVA
+// 11. ENVIAR NOVA RESERVA (PROFESSOR)
 async function enviarReserva(event) {
     event.preventDefault();
-    const equipamento = document.getElementById('select-equipamento').value;
+    const selectEquipamento = document.getElementById('select-equipamento');
+    const equipamentosSelecionados = Array.from(selectEquipamento.selectedOptions).map(opt => opt.value).join(', ');
+    
+    if (!equipamentosSelecionados) {
+        alert("Selecione pelo menos um equipamento!");
+        return;
+    }
+
     const data = document.getElementById('data-reserva').value;
     const solicitante = localStorage.getItem('usuario_nome') || "Professor";
 
@@ -246,34 +309,35 @@ async function enviarReserva(event) {
         const resposta = await fetch('http://127.0.0.1:8000/reservas/', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ solicitante, equipamento, data_reserva: data })
+            body: JSON.stringify({ solicitante, equipamento: equipamentosSelecionados, data_reserva: data })
         });
 
         if (resposta.ok) {
             alert("Reserva confirmada com sucesso!");
             document.getElementById('form-reserva').reset();
-            carregarReservas(); // Atualiza a tabela na mesma hora
+            
+            if(choicesProfessor) choicesProfessor.removeActiveItems();
+            
+            carregarReservas(); 
+            carregarDropdownReservas(); 
         } else {
-            // Se o Python der erro, ele joga na tela em vez de travar!
             const erro = await resposta.text();
             alert(" O servidor recusou a reserva. Erro: " + erro);
         }
     } catch (error) {
-        
         alert(" Erro do Navegador: " + error.message);
     }
 }
 
-// 12. CARREGAR HISTÓRICO NO DASHBOARD
+// 12. CARREGAR HISTÓRICO NO DASHBOARD DO PROFESSOR
 async function carregarReservas() {
     try {
         const resposta = await fetch('http://127.0.0.1:8000/reservas/');
         const tbody = document.getElementById('tabela-historico-reservas');
         if(!tbody) return;
         
-        // Se a tabela não existir no banco, ele mostra o erro na tela
         if (!resposta.ok) {
-            tbody.innerHTML = "<tr><td colspan='3' style='text-align:center; color:red;'> Erro: Tabela de reservas não encontrada no banco.</td></tr>";
+            tbody.innerHTML = "<tr><td colspan='3' style='text-align:center; color:red;'> Erro: Tabela de reservas não encontrada.</td></tr>";
             return;
         }
 
@@ -298,7 +362,7 @@ async function carregarReservas() {
     }
 }
 
-//13 SAIR
+// 13. SAIR
 function sair() {
     localStorage.clear();
     document.getElementById('app-section').style.display = 'none';
@@ -307,7 +371,8 @@ function sair() {
     document.getElementById('email').value = "";
     document.getElementById('senha').value = "";
 }
-// 14. ENVIAR CSV DE USUÁRIOS PARA O BACKEND
+
+// 14. ENVIAR CSV DE USUÁRIOS
 async function enviarCSV() {
     const input = document.getElementById('arquivoCsv');
     if (input.files.length === 0) {
@@ -326,13 +391,12 @@ async function enviarCSV() {
         
         const data = await response.json();
         
-       
         if (response.ok) {
             alert(data.mensagem);
-            carregarUsuarios(); 
+            carregarUsuarios();
+            carregarDashboardDiretoria(); 
         } else {
-           
-            alert("Falha ao importar: O arquivo contém e-mails já cadastrados ou estrutura inválida.\n\nDetalhe técnico: " + data.detail);
+            alert("Falha ao importar o arquivo CSV.\nVerifique as colunas do arquivo.");
         }
     } catch (error) {
         alert("Erro de conexão ao enviar CSV.");
@@ -344,55 +408,58 @@ function buscarReservasTempoReal() {
     fetch('http://127.0.0.1:8000/reservas/')
         .then(res => res.json())
         .then(data => {
-            const tbody = document.getElementById('tabela-historico-reservas'); // Ajuste para o ID da sua tabela
+            const tbody = document.getElementById('tabela-historico-reservas'); 
+            if(!tbody) return;
+            
             tbody.innerHTML = '';
             
             data.forEach(reserva => {
                 const tr = document.createElement('tr');
                 
-                // Se a reserva não foi devolvida, adiciona uma classe para destacar
                 if(!reserva.devolvido) {
                     tr.classList.add('em-uso-glow');
                 }
+
+                const botaoDevolver = !reserva.devolvido 
+                    ? `<button onclick="devolverItem(${reserva.id})" style="background-color: #3498db; padding: 5px 10px; font-size: 12px; margin-right: 5px;">↩ Devolver</button>` 
+                    : `<span style="color: #27ae60; font-weight: bold;">✔ Finalizado</span>`;
 
                 tr.innerHTML = `
                     <td>${reserva.equipamento}</td>
                     <td>${reserva.data_reserva}</td>
                     <td>${reserva.devolvido ? "Devolvido" : "Em Uso"}</td>
                     <td>
-                        <a href="http://127.0.0.1:8000/gerar-pdf/${reserva.id}" target="_blank" style="color: blue; text-decoration: underline;">Imprimir Termo PDF</a>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            ${botaoDevolver}
+                            <a href="http://127.0.0.1:8000/gerar-pdf/${reserva.id}" target="_blank" style="font-size: 12px; color: #7f8c8d; text-decoration: underline;">📄 PDF</a>
+                        </div>
                     </td>
                 `;
                 tbody.appendChild(tr);
             });
             
-            // Atualiza o Gráfico após buscar os dados
             atualizarGrafico(data);
-        });
+        })
+        .catch(erro => console.log("Aguardando carregamento de reservas..."));
 }
 
-// Atualiza a tabela automaticamente a cada 5 segundos 
-setInterval(buscarReservasTempoReal, 5000);
-// Chama uma vez logo que a página carrega
+setInterval(buscarReservasTempoReal, 5000); 
 buscarReservasTempoReal();
 
-// 16. GRÁFICO DE OCUPAÇÃO DO LABORATÓRIO
-let meuGrafico;
+// 16. GRÁFICO DE OCUPAÇÃO DO LABORATÓRIO (PROFESSOR)
 function atualizarGrafico(reservas) {
-    // Conta quantas reservas estão em uso e quantas foram devolvidas
     let emUso = reservas.filter(r => !r.devolvido).length;
     let devolvidos = reservas.filter(r => r.devolvido).length;
 
     const ctx = document.getElementById('graficoOcupacao');
+    if (!ctx) return;
     
-    // Se o gráfico já existe, apenas atualiza os dados
     if (meuGrafico) {
         meuGrafico.data.datasets[0].data = [emUso, devolvidos];
         meuGrafico.update();
         return;
     }
 
-    // Se não existe, cria o gráfico
     meuGrafico = new Chart(ctx, {
         type: 'doughnut',
         data: {
@@ -411,47 +478,8 @@ function atualizarGrafico(reservas) {
         }
     });
 }
-// 17. DEVOÇÃO DE ITENS DIRETO DO DASHBOARD
-function buscarReservasTempoReal() {
-    fetch('http://127.0.0.1:8000/reservas/')
-        .then(res => res.json())
-        .then(data => {
-            const tbody = document.getElementById('tabela-historico-reservas');
-            if (!tbody) return;
-            
-            tbody.innerHTML = '';
-            
-            data.forEach(reserva => {
-                const tr = document.createElement('tr');
-                
-                if(!reserva.devolvido) {
-                    tr.classList.add('em-uso-glow');
-                }
 
-                // Lógica do botão de devolução: só aparece se não foi devolvido
-                const botaoDevolver = !reserva.devolvido 
-                    ? `<button onclick="devolverItem(${reserva.id})" style="background-color: #3498db; padding: 5px 10px; font-size: 12px; margin-right: 5px;">↩ Devolver</button>` 
-                    : `<span style="color: #27ae60; font-weight: bold;">✔ Finalizado</span>`;
-
-                tr.innerHTML = `
-                    <td>${reserva.equipamento}</td>
-                    <td>${reserva.data_reserva}</td>
-                    <td>${reserva.devolvido ? "Devolvido" : "Em Uso"}</td>
-                    <td>
-                        <div style="display: flex; align-items: center; gap: 10px;">
-                            ${botaoDevolver}
-                            <a href="http://127.0.0.1:8000/gerar-pdf/${reserva.id}" target="_blank" style="font-size: 12px; color: #7f8c8d;">📄 PDF</a>
-                        </div>
-                    </td>
-                `;
-                tbody.appendChild(tr);
-            });
-            
-            atualizarGrafico(data);
-        });
-}
-
-// Função para devolver item/sala
+// 17. DEVOLUÇÃO DE ITENS
 async function devolverItem(id) {
     if(!confirm("Confirmar a devolução deste item/sala?")) return;
 
@@ -463,17 +491,19 @@ async function devolverItem(id) {
         if (response.ok) {
             const data = await response.json();
             alert(data.mensagem);
-            buscarReservasTempoReal(); // Atualiza a tela imediatamente
+            buscarReservasTempoReal(); 
+            carregarDashboardDiretoria(); 
+            carregarDropdownReservas(); 
+            carregarRecursosAluno();    
         } else {
             alert("Erro ao processar devolução no servidor.");
         }
     } catch (error) {
         console.error("Erro na requisição:", error);
-        alert("Não foi possível conectar ao servidor.");
     }
 }
-// 18. CARREGAR USUÁRIOS CADASTRADOS (APENAS PARA ADMIN)
-// FUNÇÃO PARA LISTAR OS USUÁRIOS NA TELA DO ADMIN (ATUALIZADA)
+
+// 18. CARREGAR USUÁRIOS
 function carregarUsuarios() {
     fetch('http://127.0.0.1:8000/usuarios/')
         .then(res => res.json())
@@ -483,7 +513,7 @@ function carregarUsuarios() {
             
             tbody.innerHTML = ''; 
             
-            data.forEach(user => {
+            data.forEach((user, index) => {
                 const tr = document.createElement('tr');
                 
                 let corPerfil = "#7f8c8d"; 
@@ -492,13 +522,13 @@ function carregarUsuarios() {
                 if (user.perfil === "TI/Recepcao" || user.perfil === "Admin") corPerfil = "#e67e22"; 
 
                 tr.innerHTML = `
-                    <td><b>#${user.id}</b></td>
+                    <td><b>#${index + 1}</b></td>
                     <td>${user.nome}</td>
                     <td>${user.matricula}</td>
                     <td>${user.email}</td>
                     <td><span style="background-color: ${corPerfil}; color: white; padding: 3px 8px; border-radius: 12px; font-size: 12px;">${user.perfil}</span></td>
                     <td>
-                        <button onclick="deletarUsuario(${user.id})" style="background-color: #e74c3c; padding: 5px 10px; font-size: 12px;">🗑️ Excluir</button>
+                        <button onclick="deletarUsuario(${user.id})" style="background-color: #e74c3c; padding: 5px 10px; font-size: 12px; color: white; border: none; cursor: pointer; border-radius: 4px;">🗑️ Excluir</button>
                     </td>
                 `;
                 tbody.appendChild(tr);
@@ -507,7 +537,7 @@ function carregarUsuarios() {
         .catch(erro => console.error("Erro ao carregar usuários:", erro));
 }
 
-// NOVA FUNÇÃO: DELETAR USUÁRIO
+// 19. DELETAR USUÁRIO
 async function deletarUsuario(id) {
     if (!confirm("Tem certeza que deseja excluir este usuário? Essa ação não pode ser desfeita.")) return;
 
@@ -519,12 +549,289 @@ async function deletarUsuario(id) {
         if (response.ok) {
             const data = await response.json();
             alert(data.mensagem);
-            carregarUsuarios(); // Atualiza a tabela na mesma hora sumindo com o usuário
+            carregarUsuarios(); 
+            carregarDashboardDiretoria(); 
         } else {
             alert("Erro ao excluir usuário no servidor.");
         }
     } catch (error) {
         console.error("Erro na requisição:", error);
-        alert("Não foi possível conectar ao servidor.");
     }
 }
+
+// 20. CADASTRAR NOVA SALA
+async function cadastrarNovaSala(event) {
+    event.preventDefault();
+    const nome = document.getElementById('nome-sala').value;
+    const modalidade = document.getElementById('modalidade-sala').value;
+
+    try {
+        const resposta = await fetch('http://127.0.0.1:8000/salas/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ nome: nome, modalidade: modalidade })
+        });
+
+        if (resposta.ok) {
+            alert("Sala cadastrada com sucesso!");
+            document.getElementById('form-cadastrar-sala').reset();
+            carregarSalasCadastradas();
+            carregarDashboardDiretoria(); 
+        } else {
+            alert("Erro ao cadastrar sala.");
+        }
+    } catch (error) { alert("Erro de conexão com o servidor."); }
+}
+
+// 21. CARREGAR SALAS CADASTRADAS
+async function carregarSalasCadastradas() {
+    try {
+        const resposta = await fetch('http://127.0.0.1:8000/salas/');
+        const salas = await resposta.json();
+        const tbody = document.getElementById('tabela-diretoria-salas-dinamica');
+        if(!tbody) return;
+        tbody.innerHTML = "";
+
+        salas.forEach((sala, index) => {
+            let classeStatus = sala.status === 'Disponível' ? 'status-ok' : 'status-recusado';
+            tbody.innerHTML += `
+                <tr>
+                    <td>#${index + 1}</td>
+                    <td><strong>${sala.nome}</strong></td>
+                    <td>${sala.modalidade}</td>
+                    <td><span class="${classeStatus}">${sala.status}</span></td>
+                    <td>
+                        <button onclick="deletarSala(${sala.id})" style="background-color: #e74c3c; padding: 5px 10px; font-size: 12px; color: white; border: none; cursor: pointer; border-radius: 4px;">🗑️ Excluir</button>
+                    </td>
+                </tr>
+            `;
+        });
+    } catch (error) { console.error("Erro ao buscar salas"); }
+}
+
+// 22. CARREGAR RECURSOS PARA O ALUNO (MODERNO)
+async function carregarRecursosAluno() {
+    try {
+        const resposta = await fetch('http://127.0.0.1:8000/recursos-disponiveis/');
+        const recursos = await resposta.json();
+        const select = document.getElementById('aluno-select-recurso');
+        if(!select) return;
+
+        if (choicesAluno) {
+            choicesAluno.destroy();
+            choicesAluno = null;
+        }
+
+        select.innerHTML = ''; 
+
+        recursos.forEach(rec => {
+            const bloqueado = rec.status === 'Ocupado' ? 'disabled' : '';
+            const statusTexto = rec.status === 'Ocupado' ? ' (Em Uso)' : '';
+            select.innerHTML += `<option value="${rec.id}" data-tipo="${rec.tipo}" ${bloqueado}>${rec.nome} - ${rec.modalidade || 'Equipamento'}${statusTexto}</option>`;
+        });
+
+        if (typeof Choices !== 'undefined') {
+            choicesAluno = new Choices(select, {
+                removeItemButton: true,
+                searchEnabled: true,
+                placeholderValue: 'O que você precisa reservar?',
+                itemSelectText: ''
+            });
+        }
+    } catch (error) { console.error("Erro ao carregar recursos para aluno", error); }
+}
+
+// 23. VERIFICAR SE O ALUNO SELECIONOU UMA SALA
+function verificarSelecaoRecursoAluno(selectElement) {
+    const opcoesSelecionadas = Array.from(selectElement.selectedOptions);
+    const exigeProfessor = opcoesSelecionadas.some(opcao => opcao.getAttribute('data-tipo') === 'Sala');
+
+    const divProfessor = document.getElementById('div-aluno-professor-responsavel');
+    const selectProfessor = document.getElementById('aluno-select-professor');
+
+    if (exigeProfessor) {
+        divProfessor.style.display = 'block';
+        selectProfessor.setAttribute('required', 'true');
+    } else {
+        divProfessor.style.display = 'none';
+        selectProfessor.removeAttribute('required');
+        selectProfessor.value = "";
+    }
+}
+
+// 24. CARREGAR PROFESSORES PARA O ALUNO
+async function carregarProfessores() {
+    try {
+        const resposta = await fetch('http://127.0.0.1:8000/usuarios/professores');
+        const professores = await resposta.json();
+        const select = document.getElementById('aluno-select-professor');
+        if(!select) return;
+
+        select.innerHTML = '<option value="">Selecione o Professor Presente (Obrigatório para Salas)</option>';
+        professores.forEach(prof => {
+            select.innerHTML += `<option value="${prof.id}">${prof.nome}</option>`;
+        });
+    } catch (error) { console.error("Erro ao carregar professores"); }
+}
+
+// 25. ENVIAR SOLICITAÇÃO DO ALUNO
+async function enviarSolicitacaoAluno(event) {
+    event.preventDefault();
+    
+    const selectRecurso = document.getElementById('aluno-select-recurso');
+    const recursosIds = Array.from(selectRecurso.selectedOptions).map(opt => opt.value).join(', ');
+    
+    if (!recursosIds) {
+        alert("Selecione pelo menos um recurso!");
+        return;
+    }
+
+    const professorId = document.getElementById('aluno-select-professor').value;
+    const finalidade = document.querySelector('#form-aluno-reserva textarea').value;
+    const alunoNome = localStorage.getItem('usuario_nome');
+
+    try {
+        const resposta = await fetch('http://127.0.0.1:8000/solicitacoes-alunos/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                aluno: alunoNome,
+                recurso_id: recursosIds, 
+                professor_id: professorId || null,
+                finalidade: finalidade
+            })
+        });
+
+        if (resposta.ok) {
+            alert("Solicitação enviada com sucesso! Aguarde a aprovação.");
+            document.getElementById('form-aluno-reserva').reset();
+            
+            if(choicesAluno) choicesAluno.removeActiveItems(); 
+            
+            carregarRecursosAluno(); 
+            document.getElementById('div-aluno-professor-responsavel').style.display = 'none';
+        } else {
+            alert("Erro ao enviar a solicitação.");
+        }
+    } catch (error) { alert("Erro de conexão ao enviar solicitação."); }
+}
+
+// 26. CARREGAR SOLICITAÇÕES DOS ALUNOS PARA O PROFESSOR
+async function carregarRequerimentosAlunos() {
+    try {
+        const professorNome = localStorage.getItem('usuario_nome');
+        const resposta = await fetch(`http://127.0.0.1:8000/solicitacoes-alunos/professor/${encodeURIComponent(professorNome)}`);
+        const solicitacoes = await resposta.json();
+        const tbody = document.getElementById('tabela-prof-aprovacoes-dinamica');
+        if(!tbody) return;
+        tbody.innerHTML = "";
+
+        solicitacoes.forEach(sol => {
+            if(sol.status === 'Pendente') {
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${sol.aluno}</td>
+                        <td>${sol.recurso_nome}</td>
+                        <td>${sol.finalidade}</td>
+                        <td><input type="text" id="motivo-${sol.id}" placeholder="Digite o motivo..." style="margin-bottom: 0;"></td>
+                        <td>
+                            <button onclick="avaliarRequerimentoAluno(${sol.id}, 'Aprovado')" style="background-color: #27ae60; padding: 5px 10px; font-size: 12px; margin-bottom: 5px; width: 100%;">✔️ Aprovar</button>
+                            <button onclick="avaliarRequerimentoAluno(${sol.id}, 'Recusado')" style="background-color: #e74c3c; padding: 5px 10px; font-size: 12px; width: 100%;">❌ Recusar</button>
+                        </td>
+                    </tr>
+                `;
+            }
+        });
+    } catch (error) { console.error("Erro ao carregar solicitações dos alunos"); }
+}
+
+// 27. PROFESSOR AVALIA SOLICITAÇÃO DO ALUNO
+async function avaliarRequerimentoAluno(id, novoStatus) {
+    const motivoInput = document.getElementById(`motivo-${id}`);
+    const motivo = motivoInput ? motivoInput.value.trim() : "";
+
+    if (!motivo) {
+        alert("O preenchimento do motivo/justificativa é OBRIGATÓRIO para a Diretoria!");
+        return;
+    }
+
+    try {
+        const resposta = await fetch(`http://127.0.0.1:8000/solicitacoes-alunos/${id}/avaliar`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: novoStatus, motivo: motivo })
+        });
+
+        if (resposta.ok) {
+            alert(`Solicitação avaliada e enviada à Diretoria!`);
+            carregarRequerimentosAlunos();
+            carregarDropdownReservas(); 
+        } else {
+            alert("Erro ao processar a avaliação.");
+        }
+    } catch (error) { alert("Erro de conexão ao avaliar."); }
+}
+
+// 28. DASHBOARD DA DIRETORIA (ESTATÍSTICAS)
+async function carregarDashboardDiretoria() {
+    try {
+        const resposta = await fetch('http://127.0.0.1:8000/diretoria/estatisticas');
+        const dados = await resposta.json();
+
+        const cardUsuarios = document.getElementById('dash-usuarios');
+        const cardAcervo = document.getElementById('dash-acervo');
+        const cardPendentes = document.getElementById('dash-pendentes');
+
+        if (cardUsuarios) cardUsuarios.innerText = dados.total_usuarios;
+        if (cardAcervo) cardAcervo.innerText = dados.total_equipamentos;
+        if (cardPendentes) cardPendentes.innerText = dados.pedidos_pendentes;
+
+        const ctx = document.getElementById('graficoDiretoria');
+        if (!ctx) return;
+
+        if (graficoDiretoriaInstancia) {
+            graficoDiretoriaInstancia.data.datasets[0].data = [dados.equipamentos_disponiveis, dados.equipamentos_ocupados];
+            graficoDiretoriaInstancia.update();
+        } else {
+            graficoDiretoriaInstancia = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: ['Disponíveis', 'Em Uso / Ocupados'],
+                    datasets: [{
+                        data: [dados.equipamentos_disponiveis, dados.equipamentos_ocupados],
+                        backgroundColor: ['#2ecc71', '#e74c3c'],
+                        borderWidth: 1
+                    }]
+                },
+                options: { responsive: true }
+            });
+        }
+    } catch (error) {
+        console.error("Erro ao carregar estatísticas da diretoria");
+    }
+}
+
+// 29. DELETAR ACESSÓRIO (ADICIONADO AQUI: Chamada assíncrona ao FastAPI para remover o item)
+async function deletarAcessorio(id) {
+    if (!confirm("Tem certeza que deseja excluir este equipamento do estoque? Essa ação não pode ser desfeita.")) return;
+
+    try {
+        const response = await fetch(`http://127.0.0.1:8000/acessorios/${id}`, {
+            method: 'DELETE'
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            alert(data.mensagem);
+            carregarAcessorios('tabela-compras-acessorios'); 
+            carregarDropdownReservas(); 
+            carregarDashboardDiretoria(); 
+        } else {
+            alert("Erro ao excluir equipamento no servidor.");
+        }
+    } catch (error) {
+        console.error("Erro na requisição:", error);
+    }
+}
+
+setInterval(carregarDashboardDiretoria, 5000);

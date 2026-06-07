@@ -7,6 +7,9 @@
     
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css" />
+    <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
+
     <style>
         /* ESTILOS GERAIS */
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
@@ -49,7 +52,7 @@
         .status-pendente { background-color: #fff3cd; color: #856404; padding: 3px 8px; border-radius: 12px; font-size: 12px; }
         .status-recusado { background-color: #f8d7da; color: #721c24; padding: 3px 8px; border-radius: 12px; font-size: 12px; }
 
-        /* NOVO CSS: Efeito visual para equipamentos em uso */
+        /* Efeito visual para equipamentos em uso */
         .em-uso-glow {
             border-left: 5px solid #28a745; 
             background-color: #f8fff9; 
@@ -86,19 +89,20 @@
                 <button class="menu-btn" onclick="mudarAba('aba-prof-dashboard', this)">Visão Geral</button>
                 <button class="menu-btn" onclick="mudarAba('aba-prof-reservas', this)">Minhas Reservas</button>
                 <button class="menu-btn" onclick="mudarAba('aba-prof-acessorios', this)">Consultar Acessórios</button>
-                <button class="menu-btn" onclick="mudarAba('aba-prof-requerimentos', this)">Requerimentos</button>
+                <button class="menu-btn" onclick="mudarAba('aba-prof-requerimentos', this)">Meus Requerimentos</button>
+                <button class="menu-btn" onclick="mudarAba('aba-prof-aprovacoes-alunos', this)">Solicitações de Alunos</button>
             </div>
 
             <div id="menu-aluno" class="menu-grupo">
                 <button class="menu-btn" onclick="mudarAba('aba-aluno-dashboard', this)">Meu Painel</button>
-                <button class="menu-btn" onclick="mudarAba('aba-aluno-reservar', this)">Reservar Equipamento</button>
+                <button class="menu-btn" onclick="mudarAba('aba-aluno-reservar', this)">Solicitar Equipamento</button>
             </div>
 
             <div id="menu-compras" class="menu-grupo">
                 <button class="menu-btn" onclick="mudarAba('aba-compras-dashboard', this)">Visão Geral</button>
-                <button class="menu-btn" onclick="mudarAba('aba-compras-pedidos', this)">Pedidos de Compra</button>
+                <button class="menu-btn" onclick="mudarAba('aba-compras-pedidos', this)">Aprovações da Diretoria</button>
                 <button class="menu-btn" onclick="mudarAba('aba-compras-adicionar', this)">Cadastrar no Estoque</button>
-                
+                <button class="menu-btn" onclick="mudarAba('aba-diretoria-salas', this)">Gerenciar Salas</button>
                 <button class="menu-btn" onclick="mudarAba('aba-ti-usuarios', this); carregarUsuarios();">Gerenciar Usuários</button>
             </div>
             
@@ -132,7 +136,7 @@
                 <div class="card">
                     <h3>Solicitar Nova Reserva</h3>
                     <form id="form-reserva" onsubmit="enviarReserva(event)" style="margin-top: 15px;">
-                        <select id="select-equipamento" required>
+                        <select id="select-equipamento" required multiple title="Selecione um ou mais equipamentos">
                             <option value="">Carregando equipamentos...</option>
                         </select>
                         <input type="date" id="data-reserva" required>
@@ -140,6 +144,7 @@
                     </form>
                 </div>
             </div>
+
             <div id="aba-prof-acessorios" class="aba">
                 <div class="card">
                     <h3>Acessórios Disponíveis</h3>
@@ -153,7 +158,7 @@
 
             <div id="aba-prof-requerimentos" class="aba">
                 <div class="card">
-                    <h3>Solicitar novo equipamento</h3>
+                    <h3>Solicitar novo equipamento (Para Diretoria)</h3>
                     <form id="form-prof-req" onsubmit="enviarRequerimento(event)" style="margin-top: 15px;">
                         <input type="text" id="req-equipamento" placeholder="Qual equipamento está faltando?" required>
                         <textarea id="req-justificativa" placeholder="Justificativa da necessidade para a aula" rows="3" required></textarea>
@@ -170,6 +175,27 @@
                 </div>
             </div>
 
+            <div id="aba-prof-aprovacoes-alunos" class="aba">
+                <div class="card">
+                    <h3>Análise de Requerimentos de Alunos</h3>
+                    <p style="font-size: 14px; color: #666; margin-bottom: 15px;">Aprove ou recuse as solicitações dos alunos. É obrigatório informar o motivo para envio automático à Diretoria.</p>
+                    <button onclick="carregarRequerimentosAlunos()" style="background-color: #3498db; margin-bottom: 10px;">🔄 Atualizar Requerimentos</button>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Aluno</th>
+                                <th>Recurso Solicitado</th>
+                                <th>Finalidade</th>
+                                <th>Motivo / Justificativa (Obrigatório)</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabela-prof-aprovacoes-dinamica">
+                            </tbody>
+                    </table>
+                </div>
+            </div>
+
             <div id="aba-aluno-dashboard" class="aba">
                 <div class="card">
                     <h3>Avisos Importantes</h3>
@@ -179,31 +205,77 @@
 
             <div id="aba-aluno-reservar" class="aba">
                 <div class="card">
-                    <h3>Reserva de Equipamentos para Estudo</h3>
-                    <form onsubmit="alert('Sua solicitação está em análise.'); event.preventDefault();">
-                        <select required>
-                            <option value="">O que você precisa reservar?</option>
-                            <option value="notebook">Notebook Dell</option>
+                    <h3>Solicitar Equipamento ou Sala</h3>
+                    <p style="font-size: 14px; color: #666; margin-bottom: 15px;">Selecione o recurso desejado. Se for uma sala, indique o professor responsável.</p>
+                    
+                    <form id="form-aluno-reserva" onsubmit="alert('Sua solicitação foi enviada para o professor.'); event.preventDefault();">
+                        
+                        <select id="aluno-select-recurso" required multiple onchange="verificarSelecaoRecursoAluno(this)" title="Selecione um ou mais recursos">
+                            <option value="">Carregando recursos disponíveis...</option>
                         </select>
-                        <textarea placeholder="Qual a finalidade?" rows="2" required></textarea>
+
+                        <div id="div-aluno-professor-responsavel" style="display: none;">
+                            <select id="aluno-select-professor">
+                                <option value="">Selecione o Professor Presente (Obrigatório para Salas)</option>
+                                </select>
+                        </div>
+
+                        <textarea placeholder="Qual a finalidade da solicitação?" rows="3" required></textarea>
                         <button type="submit" style="background-color: #2980b9;">Enviar Solicitação</button>
                     </form>
                 </div>
             </div>
 
             <div id="aba-compras-dashboard" class="aba">
-                <div class="card">
-                    <h3>Status do Inventário</h3>
-                    <p>Acesse a aba de Pedidos para avaliar as solicitações dos professores.</p>
+                <div style="display: flex; gap: 20px; margin-bottom: 20px; flex-wrap: wrap;">
+                    <div class="card" style="flex: 1; text-align: center; border-left: 5px solid #3498db; padding: 15px;">
+                        <h3 style="color: #7f8c8d; font-size: 14px; margin-bottom: 10px;">Total de Usuários</h3>
+                        <p id="dash-usuarios" style="font-size: 28px; font-weight: bold; color: #2c3e50;">...</p>
+                    </div>
+                    <div class="card" style="flex: 1; text-align: center; border-left: 5px solid #9b59b6; padding: 15px;">
+                        <h3 style="color: #7f8c8d; font-size: 14px; margin-bottom: 10px;">Equipamentos no Acervo</h3>
+                        <p id="dash-acervo" style="font-size: 28px; font-weight: bold; color: #2c3e50;">...</p>
+                    </div>
+                    <div class="card" style="flex: 1; text-align: center; border-left: 5px solid #e74c3c; padding: 15px;">
+                        <h3 style="color: #7f8c8d; font-size: 14px; margin-bottom: 10px;">Aprovações Pendentes</h3>
+                        <p id="dash-pendentes" style="font-size: 28px; font-weight: bold; color: #e74c3c;">...</p>
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+                    <div class="card" style="flex: 1; display: flex; flex-direction: column; align-items: center;">
+                        <h3 style="margin-bottom: 10px;">Disponibilidade do Estoque</h3>
+                        <div style="width: 250px; height: 250px;">
+                            <canvas id="graficoDiretoria"></canvas>
+                        </div>
+                    </div>
+                    
+                    <div class="card" style="flex: 1;">
+                        <h3 style="margin-bottom: 15px;">Ações Rápidas</h3>
+                        <div style="display: flex; flex-direction: column; gap: 12px;">
+                            <button onclick="mudarAba('aba-compras-pedidos', document.querySelector('#menu-compras button:nth-child(2)'))" style="background-color: #f39c12; width: 100%; text-align: left; padding: 15px; font-size: 15px;">📋 Avaliar Solicitações Pendentes</button>
+                            <button onclick="mudarAba('aba-ti-usuarios', document.querySelector('#menu-compras button:nth-child(5)'))" style="background-color: #2980b9; width: 100%; text-align: left; padding: 15px; font-size: 15px;">👥 Cadastrar / Importar Usuários</button>
+                            <button onclick="mudarAba('aba-compras-adicionar', document.querySelector('#menu-compras button:nth-child(3)'))" style="background-color: #27ae60; width: 100%; text-align: left; padding: 15px; font-size: 15px;">📦 Adicionar Equipamento ao Estoque</button>
+                        </div>
+                    </div>
                 </div>
             </div>
 
             <div id="aba-compras-pedidos" class="aba">
                 <div class="card">
-                    <h3>Requerimentos dos Professores</h3>
-                    <button onclick="carregarRequerimentos()" style="background-color: #3498db; margin-bottom: 10px;">🔄 Atualizar Pedidos</button>
+                    <h3>Painel da Diretoria: Aprovações e Notificações</h3>
+                    <button onclick="carregarRequerimentos()" style="background-color: #3498db; margin-bottom: 10px;">🔄 Atualizar Painel</button>
                     <table>
-                        <thead><tr><th>Solicitante</th><th>Equipamento</th><th>Justificativa</th><th>Status</th><th>Ações</th></tr></thead>
+                        <thead>
+                            <tr>
+                                <th>Origem</th>
+                                <th>Recurso</th>
+                                <th>Professor Responsável</th>
+                                <th>Motivo / Justificativa</th>
+                                <th>Status</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
                         <tbody id="tabela-compras-pedidos-dinamica"></tbody>
                     </table>
                 </div>
@@ -211,19 +283,60 @@
 
             <div id="aba-compras-adicionar" class="aba">
                 <div class="card">
-                    <h3>Adicionar Item Comprado ao Estoque</h3>
+                    <h3>Adicionar Novo Equipamento ao Estoque</h3>
                     <form id="form-acessorio" onsubmit="cadastrarAcessorio(event)">
-                        <input type="text" id="nome-acessorio" placeholder="Nome do Equipamento (Ex: Datashow)" required>
+                        <input type="text" id="nome-acessorio" placeholder="Nome do Equipamento (Ex: Datashow, Notebook, Livro)" required>
                         <input type="text" id="patrimonio-acessorio" placeholder="Código de Patrimônio" required readonly style="background-color: #e9ecef; cursor: not-allowed;" title="Gerado Automaticamente">
-                        <button type="submit" style="background-color: #27ae60;">Gravar no Banco de Dados</button>
+                        <button type="submit" style="background-color: #27ae60;">Gravar Equipamento no Banco de Dados</button>
                     </form>
                 </div>
                 <div class="card">
-                    <h3>Estoque Atual (Banco de Dados)</h3>
-                    <button onclick="carregarAcessorios('tabela-compras-acessorios')" style="background-color: #28a745; margin-bottom: 10px;">🔄 Atualizar</button>
+                    <h3>Estoque Atual de Equipamentos</h3>
+                    <button onclick="carregarAcessorios('tabela-compras-acessorios')" style="background-color: #28a745; margin-bottom: 10px;">🔄 Atualizar Estoque</button>
                     <table>
-                        <thead><tr><th>ID</th><th>Nome</th><th>Patrimônio</th><th>Status</th></tr></thead>
+                        <thead><tr><th>ID</th><th>Nome</th><th>Patrimônio</th><th>Status</th><th>Ações</th></tr></thead>
                         <tbody id="tabela-compras-acessorios"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="aba-diretoria-salas" class="aba">
+                <div class="card">
+                    <h3>Adicionar Novo Espaço / Sala</h3>
+                    <p style="font-size: 14px; color: #666; margin-bottom: 15px;">Acesso restrito. Cadastre novas infraestruturas para disponibilizar aos alunos e professores.</p>
+                    <form id="form-cadastrar-sala" onsubmit="cadastrarNovaSala(event)">
+                        <input type="text" id="nome-sala" placeholder="Nome do Espaço (Ex: Laboratório de Química 01)" required>
+                        
+                        <select id="modalidade-sala" required>
+                            <option value="">Selecione a Modalidade do Espaço...</option>
+                            <option value="Física">Laboratório de Física</option>
+                            <option value="Química">Laboratório de Química</option>
+                            <option value="Biologia">Laboratório de Biologia</option>
+                            <option value="Informática">Sala de Informática</option>
+                            <option value="Quadra">Quadra Poliesportiva</option>
+                            <option value="Biblioteca">Biblioteca / Alocação de Livros</option>
+                            <option value="Comum">Sala de Aula Padrão</option>
+                        </select>
+                        
+                        <button type="submit" style="background-color: #8e44ad;">Gravar Sala no Sistema</button>
+                    </form>
+                </div>
+
+                <div class="card">
+                    <h3>Espaços Físicos Cadastrados</h3>
+                    <button onclick="carregarSalasCadastradas()" style="background-color: #3498db; margin-bottom: 10px;">🔄 Atualizar Lista de Salas</button>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Nome do Espaço</th>
+                                <th>Modalidade</th>
+                                <th>Status de Ocupação</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabela-diretoria-salas-dinamica">
+                            </tbody>
                     </table>
                 </div>
             </div>
@@ -231,7 +344,7 @@
             <div id="aba-ti-usuarios" class="aba">
                 <div class="card">
                     <h3>Importação de Usuários em Lote</h3>
-                    <p style="font-size: 14px; color: #666; margin-bottom: 10px;">Acesso restrito: Selecione um arquivo .CSV para cadastrar novos usuários no sistema.</p>
+                    <p style="font-size: 14px; color: #666; margin-bottom: 10px;">Acesso restrito: Selecione um arquivo .CSV para cadastrar novos usuários no system.</p>
                     <div style="display: flex; gap: 10px; align-items: center;">
                         <input type="file" id="arquivoCsv" accept=".csv" style="margin-bottom: 0;" />
                         <button onclick="enviarCSV()" style="background-color: #28a745; white-space: nowrap;">Cadastrar Turma (CSV)</button>
@@ -240,16 +353,16 @@
 
                 <div class="card">
                     <h3>Usuários Cadastrados no Sistema</h3>
-                    <p style="font-size: 14px; color: #666; margin-bottom: 15px;">Visão exclusiva da Administração/TI.</p>
+                    <p style="font-size: 14px; color: #666; margin-bottom: 15px;">A sequência da tabela (#) é ajustada automaticamente independente do ID de cadastro.</p>
                     <button onclick="carregarUsuarios()" style="background-color: #3498db; margin-bottom: 10px;">🔄 Atualizar Lista</button>
                     <table>
                         <thead>
                             <tr>
-                                <th>ID</th>
-                                <th>Nome</th>
+                                <th>#</th> <th>Nome</th>
                                 <th>Matrícula</th>
                                 <th>E-mail</th>
                                 <th>Perfil</th>
+                                <th>Ações</th>
                             </tr>
                         </thead>
                         <tbody id="tabela-usuarios-cadastrados">
