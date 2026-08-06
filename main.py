@@ -15,6 +15,8 @@ import bcrypt
 from database import engine, SessionLocal, Base
 import models, schemas
 
+# \\inicializa o software
+# py -m uvicorn main:app --reload\\
 # Cria as tabelas no banco de dados
 Base.metadata.create_all(bind=engine)
 
@@ -436,22 +438,22 @@ def gerar_pdf(reserva_id: int, db: Session = Depends(get_db)):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", 'B', 16)
-    pdf.cell(200, 10, txt="SmartInventory Academico", ln=True, align="C")
+    pdf.cell(200, 10, text="SmartInventory Academico", ln=1, align="C")
     pdf.set_font("Arial", 'B', 14)
-    pdf.cell(200, 10, txt="Termo de Responsabilidade e Check-out", ln=True, align="C")
+    pdf.cell(200, 10, text="Termo de Responsabilidade e Check-out", ln=1, align="C")
     pdf.ln(10)
     
     pdf.set_font("Arial", size=12)
-    pdf.cell(200, 10, txt=f"ID da Reserva: {reserva.id}", ln=True)
-    pdf.cell(200, 10, txt=f"Professor/Solicitante: {reserva.solicitante}", ln=True)
+    pdf.cell(200, 10, text=f"ID da Reserva: {reserva.id}", ln=1)
+    pdf.cell(200, 10, text=f"Professor/Solicitante: {reserva.solicitante}", ln=1)
     
-    pdf.cell(200, 10, txt="Equipamento(s)/Sala(s):", ln=True)
-    pdf.multi_cell(0, 10, txt=f"{reserva.equipamento}")
+    pdf.cell(200, 10, text="Equipamento(s)/Sala(s):", ln=1)
+    pdf.multi_cell(0, 10, text=f"{reserva.equipamento}")
     
-    pdf.cell(200, 10, txt=f"Data de Retirada: {reserva.data_reserva}", ln=True)
+    pdf.cell(200, 10, text=f"Data de Retirada: {reserva.data_reserva}", ln=1)
     
     pdf.ln(20)
-    pdf.cell(200, 10, txt="Assinatura do Responsavel: _____________________________________", ln=True)
+    pdf.cell(200, 10, text="Assinatura do Responsavel: _____________________________________", ln=1)
     
     fd, path = tempfile.mkstemp(suffix=".pdf")
     os.close(fd)

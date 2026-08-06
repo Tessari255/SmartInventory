@@ -31,6 +31,8 @@ class LoginResponse(BaseModel):
     usuario_id: int
     nome: str
     perfil: str
+    access_token: Optional[str] = None
+    token_type: Optional[str] = None
 
 # --- Schemas de Usuário ---
 class UsuarioCreate(BaseModel):
